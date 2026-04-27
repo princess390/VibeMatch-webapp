@@ -1410,9 +1410,11 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function renderResults(items) {
-  items = uniqueItems(prioritizeItemsWithImages(await keepOnlyItemsWithImages(items)));
-
   const container = document.getElementById("results");
+
+  if (!container) return;
+
+  items = uniqueItems(prioritizeItemsWithImages(await keepOnlyItemsWithImages(items)));
 
   container.innerHTML = "";
 
@@ -1438,6 +1440,7 @@ async function renderResults(items) {
 }
 
 async function applyFilters() {
+  if (!document.getElementById("results")) return;
 
   const moodInput = document
     .getElementById("moodFilter")
@@ -1499,6 +1502,7 @@ function rotatePlaceholder() {
 setInterval(rotatePlaceholder, 2500);
 
 async function quickFilter(type) {
+  if (!document.getElementById("results")) return;
 
   const buttons = document.querySelectorAll(".filter-btn");
 
@@ -2146,6 +2150,7 @@ window.createCard = createCard;
 window.loadSaved = loadSaved;
 
 async function applyUrlFilters() {
+  if (!document.getElementById("results")) return;
 
   const params = new URLSearchParams(window.location.search);
 
