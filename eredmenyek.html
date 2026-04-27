@@ -1,0 +1,96 @@
+﻿<!DOCTYPE html>
+<html lang="hu">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Eredmények - VibeMatch</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Saját CSS -->
+  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="stylesheet" href="assets/css/navbar.css">
+  <link rel="stylesheet" href="assets/css/kartyak.css">
+  <link rel="stylesheet" href="assets/css/responsive.css">
+</head>
+
+<body>
+
+  <header id="navbar"></header>
+
+  <div class="filter-container mb-4">
+
+    <div class="row g-3 align-items-center">
+
+      <div class="col-md-6">
+        <input type="text" id="moodFilter" class="form-control filter-input" placeholder="Hangulat keresése...">
+      </div>
+
+      <div class="col-md-4">
+        <select id="typeFilter" class="form-select filter-select">
+          <option value="all">Összes típus</option>
+          <option value="film">Filmek</option>
+          <option value="sorozat">Sorozatok</option>
+          <option value="konyv">Könyvek</option>
+          <option value="zene">Zenék</option>
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <select id="platformFilter" class="form-select filter-select">
+          <option value="all">Összes platform</option>
+          <option value="Netflix">Netflix</option>
+          <option value="HBO">HBO</option>
+          <option value="Disney+">Disney+</option>
+          <option value="Prime Video">Prime Video</option>
+          <option value="Spotify">Spotify</option>
+          <option value="Libri">Libri</option>
+          <option value="Bookline">Bookline</option>
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <button class="btn filter-button w-100" onclick="applyFilters()">
+          Keresés
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+  </div>
+  <div class="quick-filters mb-4">
+
+    <button class="filter-btn " data-type="all" onclick="quickFilter('all')">Összes</button>
+
+    <button class="filter-btn" data-type="film" onclick="quickFilter('film')">Filmek</button>
+
+    <button class="filter-btn" data-type="sorozat" onclick="quickFilter('sorozat')">Sorozatok</button>
+
+    <button class="filter-btn" data-type="konyv" onclick="quickFilter('konyv')">Könyvek</button>
+
+    <button class="filter-btn" data-type="zene" onclick="quickFilter('zene')">Zenék</button>
+
+  </div>
+  <div id="results" class="row g-4"></div>
+
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script src="assets/js/adatok.js"></script>
+
+  <script type="module" src="assets/js/main.js"></script>
+  <script type="module" src="assets/js/auth-ui.js"></script>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <div id="loginModalContainer"></div>
+  <div id="logoutModalContainer"></div>
+
+  <div id="registerModalContainer"></div>
+</body>
+
+</html>
