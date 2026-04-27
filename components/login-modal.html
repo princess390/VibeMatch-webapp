@@ -1,0 +1,30 @@
+﻿<div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content auth-modal">
+      <div class="modal-header">
+        <h5 class="modal-title">Bejelentkezés</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+      </div>
+
+      <div class="modal-body">
+        <form id="loginForm" novalidate>
+          <div class="mb-3">
+            <label for="loginEmail" class="form-label">Email</label>
+            <input type="email" class="form-control" id="loginEmail" autocomplete="email" required>
+          </div>
+
+          <div class="mb-3">
+            <label for="loginPassword" class="form-label">Jelszó</label>
+            <input type="password" class="form-control" id="loginPassword" autocomplete="current-password" required>
+          </div>
+
+          <p id="loginMessage" class="auth-message" aria-live="polite"></p>
+
+          <button type="submit" class="btn btn-primary w-100">
+            Bejelentkezem
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
