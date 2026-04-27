@@ -1842,7 +1842,8 @@ function getSavedItemPayload(userId, item) {
     platform: item.platform,
     image: item.image || getPlaceholderImage(),
     link: item.link || "",
-    moods: item.moods || []
+    moods: item.moods || [],
+    description: item.description || item.overview || ""
   };
 }
 
@@ -1853,6 +1854,38 @@ function getLegacySavedItemPayload(userId, item) {
     type: item.type,
     platform: item.platform,
     image: item.image || getPlaceholderImage()
+  };
+}
+
+function getSavedDescriptionFallback(item) {
+  const type = normalizeText(item?.type);
+
+  if (type === "film") {
+    return "Hangulatalapú film ajánlás, amely a választott vibe és a népszerűségi szempontok alapján került a találatok közé.";
+  }
+
+  if (type === "sorozat") {
+    return "Hangulathoz illő sorozatajánló, amely aktuális és népszerű tartalmak közül került kiválasztásra.";
+  }
+
+  if (type === "konyv") {
+    return "Magyarul is elérhető könyvajánló, amely a keresett hangulathoz és olvasási élményhez illeszkedik.";
+  }
+
+  if (type === "zene") {
+    return "Hangulat alapján ajánlott zenei találat, amely a választott vibe-hoz illő dalok közül került kiválasztásra.";
+  }
+
+  return "Hangulatalapú ajánlás, amely a VibeMatch keresési és szűrési logikája alapján jelent meg.";
+}
+
+function normalizeSavedItemForDisplay(item) {
+  return {
+    ...item,
+    image: item.image || getPlaceholderImage(),
+    link: item.link || "#",
+    moods: Array.isArray(item.moods) ? item.moods : [],
+    description: item.description || item.overview || getSavedDescriptionFallback(item)
   };
 }
 
@@ -2008,11 +2041,12 @@ async function loadSaved() {
   const seenKeys = new Set();
 
   [...getLocalSavedItems(user.id), ...(data || [])].forEach(item => {
-    const key = getSavedKey(item);
+    const displayItem = normalizeSavedItemForDisplay(item);
+    const key = getSavedKey(displayItem);
     if (seenKeys.has(key)) return;
 
     seenKeys.add(key);
-    uniqueItems.push(item);
+    uniqueItems.push(displayItem);
   });
 
   if (uniqueItems.length === 0) {
@@ -2099,7 +2133,8 @@ async function toggleSave(item, button) {
         platform: item.platform,
         image: item.image || getPlaceholderImage(),
         link: item.link,
-        moods: item.moods || []
+        moods: item.moods || [],
+        description: item.description || item.overview || getSavedDescriptionFallback(item)
       };
 
       toggleLocalItem(currentUser.id, fallbackItem, button);
