@@ -2,6 +2,13 @@
 
 const form = document.getElementById("registerForm");
 
+function getAuthRedirectUrl() {
+  const pathParts = window.location.pathname.split("/").filter(Boolean);
+  const repoBasePath = pathParts.length > 0 ? `/${pathParts[0]}/` : "/";
+
+  return `${window.location.origin}${repoBasePath}`;
+}
+
 if (form) {
   form.addEventListener("submit", async event => {
     event.preventDefault();
@@ -9,7 +16,13 @@ if (form) {
     const email = document.getElementById("registerEmail")?.value.trim() || document.getElementById("email")?.value.trim();
     const password = document.getElementById("registerPassword")?.value || document.getElementById("password")?.value;
 
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: getAuthRedirectUrl()
+      }
+    });
 
     if (error) {
       alert(error.message);

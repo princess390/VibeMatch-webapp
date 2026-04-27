@@ -158,6 +158,8 @@ async function updateNavbar() {
 }
 
 function initAuthForms() {
+  const authRedirectUrl = getAuthRedirectUrl();
+
   bindAuthForm({
     formId: "loginForm",
     emailId: "loginEmail",
@@ -175,8 +177,21 @@ function initAuthForms() {
     messageId: "registerMessage",
     loadingText: "Regisztrálás...",
     successText: "Sikeres regisztráció. Ellenőrizd az emailed, ha megerősítést kér a rendszer.",
-    submit: ({ email, password }) => supabase.auth.signUp({ email, password })
+    submit: ({ email, password }) => supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: authRedirectUrl
+      }
+    })
   });
+}
+
+function getAuthRedirectUrl() {
+  const pathParts = window.location.pathname.split("/").filter(Boolean);
+  const repoBasePath = pathParts.length > 0 ? `/${pathParts[0]}/` : "/";
+
+  return `${window.location.origin}${repoBasePath}`;
 }
 
 function bindAuthForm({ formId, emailId, passwordId, messageId, loadingText, successText, submit }) {
