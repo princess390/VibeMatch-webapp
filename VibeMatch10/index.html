@@ -1,0 +1,342 @@
+﻿<!DOCTYPE html>
+<html lang="hu">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeMatch</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Saját CSS -->
+  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="stylesheet" href="assets/css/navbar.css">
+  <link rel="stylesheet" href="assets/css/kartyak.css">
+  <link rel="stylesheet" href="assets/css/responsive.css">
+</head>
+
+<body>
+
+  <div id="navbar"></div>
+
+  <section class="hero-section d-flex align-items-center text-center">
+    <div class="container">
+      <h1 class="display-5 fw-bold mb-3">
+        Találd meg a hangulatodhoz illő tartalmat
+      </h1>
+      <p class="lead mb-4">
+        Filmek, sorozatok és könyvek – a pillanatnyi vibe-od alapján.
+      </p>
+
+      <div class="search-box mx-auto">
+        <input type="text" id="moodSearch" class="form-control form-control-lg" placeholder="Írd be a hangulatod...">
+        <button class="btn btn-lg mt-3 hero-search-btn" onclick="searchMood()">Keresés</button>
+      </div>
+
+      <div class="mood-buttons mt-4">
+        <button class="btn btn-outline-light m-1" onclick="selectMood('romantikus')">Romantikus</button>
+        <button class="btn btn-outline-light m-1" onclick="selectMood('melankolikus')">Melankolikus</button>
+        <button class="btn btn-outline-light m-1" onclick="selectMood('misztikus')">Misztikus</button>
+        <button class="btn btn-outline-light m-1" onclick="selectMood('kalandos')">Kalandos</button>
+      </div>
+
+      <div class="random-vibe mt-4">
+        <button class="btn random-btn" onclick="randomVibe()">
+          🎲 Adj egy random vibe-ot
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="popular-vibes">
+    <div class="container">
+
+      <h2 class="text-center mb-5 vibe-title">
+        🔥 Fedezd fel a hét legnépszerűbb Vibe-jait
+      </h2>
+
+      <div class="row">
+
+        <!-- CARD 1 -->
+        <div class="col-12 col-md-6 col-lg-3 mb-4">
+          <div class="card-item">
+
+            <img src="assets/Images/hangulat-fotok/chilltime.jpg" class="card-image" alt="Chill time">
+
+            <div class="card-body">
+
+              <h5 class="card-title">Chill time</h5>
+
+              <p class="card-text">
+                Lazíts egy nyugodt délutánra hangolt ajánlóval.
+              </p>
+
+              <button class="card-button" onclick="selectMood('chilltime')">
+                Tovább
+              </button>
+
+            </div>
+          </div>
+        </div>
+
+
+        <!-- CARD 2 -->
+        <div class="col-12 col-md-6 col-lg-3 mb-4">
+          <div class="card-item">
+
+            <img src="assets/Images/hangulat-fotok/autumn.jpg" class="card-image" alt="Autumn vibes">
+
+            <div class="card-body">
+
+              <h5 class="card-title">Őszi hangulat</h5>
+
+              <p class="card-text">
+                Hangolódj az őszi esték meleg hangulatára.
+              </p>
+
+              <button class="card-button" onclick="selectMood('autumn')">
+                Tovább
+              </button>
+
+            </div>
+          </div>
+        </div>
+
+
+        <!-- CARD 3 -->
+        <div class="col-12 col-md-6 col-lg-3 mb-4">
+          <div class="card-item">
+
+            <img src="assets/Images/hangulat-fotok/datenight.jpg" class="card-image" alt="Date night">
+
+            <div class="card-body">
+
+              <h5 class="card-title">Date night</h5>
+
+              <p class="card-text">
+                Ajánlók egy tökéletes randi estéhez.
+              </p>
+
+              <button class="card-button" onclick="selectMood('datenight')">
+                Tovább
+              </button>
+
+            </div>
+          </div>
+        </div>
+
+
+        <!-- CARD 4 -->
+        <div class="col-12 col-md-6 col-lg-3 mb-4">
+          <div class="card-item">
+
+            <img src="assets/Images/hangulat-fotok/christmas.jpg" class="card-image" alt="Christmas">
+
+            <div class="card-body">
+
+              <h5 class="card-title">Karácsonyi vibe</h5>
+
+              <p class="card-text">
+                Karácsonyi hangulat? Már most megalapozzuk.
+              </p>
+
+              <button class="card-button" onclick="selectMood('christmas')">
+                Tovább
+              </button>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="popular-section py-5">
+
+  <div class="container">
+
+    <h3 class="section-heading mb-4">
+      Népszerű filmek és sorozatok
+    </h3>
+
+    <div class="slider-wrapper">
+
+      <button class="slider-btn left"
+              onclick="scrollSlider('moviesSlider', -1)">
+        ‹
+      </button>
+
+      <div class="slider" id="moviesSlider">
+        <!-- ide kerülnek JS-ből a card-item kártyák -->
+      </div>
+
+      <button class="slider-btn right"
+              onclick="scrollSlider('moviesSlider', 1)">
+        ›
+      </button>
+
+    </div>
+
+  </div>
+
+</section>
+  <!-- Szöveges szekció 50/50 -->
+  <section class="info-section">
+    <div class="row g-0">
+
+      <div class="col-12 col-md-6 info-left">
+        <div class="info-content">
+          <h4 class="mb-3">Mi az a VibeMatch?</h4>
+          <p>
+            A VibeMatch segít megtalálni a hangulatodhoz illő filmeket,
+            sorozatokat és könyveket – gyorsan, egyszerűen, személyre szabva.
+          </p>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6 info-right">
+        <div class="info-content text-center">
+          <h4>
+            Találd meg a pillanatodhoz<br>
+            illő tartalmat.
+          </h4>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+<!-- Népszerű zenék -->
+<section class="popular-music py-5">
+
+  <div class="container">
+
+    <h3 class="section-heading mb-4 text-white">
+      Népszerű zenék
+    </h3>
+
+    <div class="slider-wrapper">
+
+      <button class="slider-btn left"
+              onclick="scrollSlider('musicSlider', -1)">
+        ‹
+      </button>
+
+      <div class="slider" id="musicSlider">
+        <!-- ide kerülnek JS-ből a card-item kártyák -->
+      </div>
+
+      <button class="slider-btn right"
+              onclick="scrollSlider('musicSlider', 1)">
+        ›
+      </button>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+<section class="today-picks py-5">
+  <div class="container">
+
+    <h2 class="text-center section-title mb-5">
+      ⭐ Ma ezt ajánljuk
+    </h2>
+
+    <div class="row g-4 justify-content-center" id="todayPicks"></div>
+
+  </div>
+</section>
+
+  <!-- Filmek, sorozatok, könyvek, zenék -->
+  <section class="category-section py-5">
+    <div class="container">
+      <div class="row g-4">
+
+        <div class="col-6 col-md-3">
+          <a class="category-card film-card" href="eredmenyek.html?type=film">
+            <div class="category-content">
+              <h4>Filmek</h4>
+            </div>
+          </a>
+        </div>
+
+        <div class="col-6 col-md-3">
+          <a class="category-card series-card" href="eredmenyek.html?type=sorozat">
+            <div class="category-content">
+              <h4>Sorozatok</h4>
+            </div>
+          </a>
+        </div>
+
+        <div class="col-6 col-md-3">
+          <a class="category-card book-card" href="eredmenyek.html?type=konyv">
+            <div class="category-content">
+              <h4>Könyvek</h4>
+            </div>
+          </a>
+        </div>
+
+        <div class="col-6 col-md-3">
+          <a class="category-card music-card" href="eredmenyek.html?type=zene">
+            <div class="category-content">
+              <h4>Zenék</h4>
+            </div>
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Népszerű könyvek -->
+<section class="popular-books py-5">
+
+  <div class="container">
+
+    <h3 class="section-heading mb-4">
+      Népszerű könyvek
+    </h3>
+
+    <div class="slider-wrapper">
+
+      <button class="slider-btn left"
+              onclick="scrollSlider('booksSlider', -1)">
+        ‹
+      </button>
+
+      <div class="slider" id="booksSlider">
+        <!-- ide kerülnek JS-ből a card-item kártyák -->
+      </div>
+
+      <button class="slider-btn right"
+              onclick="scrollSlider('booksSlider', 1)">
+        ›
+      </button>
+
+    </div>
+
+  </div>
+
+</section>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script src="assets/js/adatok.js?v=20260428-2"></script>
+
+  <script type="module" src="assets/js/main.js?v=20260428-2"></script>
+  <script type="module" src="assets/js/auth-ui.js?v=20260428-2"></script>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <div id="loginModalContainer"></div>
+  <div id="logoutModalContainer"></div>
+
+  <div id="registerModalContainer"></div>
+
+</body>
+
+</html>
