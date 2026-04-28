@@ -1,5 +1,5 @@
 ﻿import supabase from "./supabase.js";
-import { findMood, getMoodByKey, getMoodLabels } from "./moods.js";
+import { findMood, getMoodByKey, getMoodLabels, normalizeText } from "./moods.js";
 
 const TMDB_API_KEY = "55bb82a9225c1d8ac96916c5053e2581";
 const TMDB_LANGUAGE = "hu-HU";
@@ -1364,18 +1364,19 @@ async function showResults() {
 
 function searchMood() {
 
-  const input = document.getElementById("moodSearch").value.toLowerCase();
+  const rawInput = document.getElementById("moodSearch").value;
+  const input = normalizeText(rawInput);
 
   let mood = "";
   let type = "";
 
   /* TÍPUS felismerése */
-  if (input.includes("film")) type = "film";
-  if (input.includes("sorozat")) type = "sorozat";
-  if (input.includes("zene")) type = "zene";
-  if (input.includes("konyv")) type = "konyv";
+  if (/\b(film|filmet|filmek|mozi|mozizni)\b/.test(input)) type = "film";
+  if (/\b(sorozat|sorozatot|sorozatok|széria|szeria)\b/.test(input)) type = "sorozat";
+  if (/\b(zene|zenet|zenék|zenek|dal|dalt|szam|szám|playlist)\b/.test(input)) type = "zene";
+  if (/\b(konyv|könyv|konyvet|könyvet|konyvek|könyvek|olvasni|regeny|regény)\b/.test(input)) type = "konyv";
 
-  const foundMood = findMood(input);
+  const foundMood = findMood(rawInput);
   if (foundMood) {
     mood = foundMood[0];
   }

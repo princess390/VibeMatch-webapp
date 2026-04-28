@@ -6,6 +6,9 @@ Használat
 
 A projekt statikus weboldalként futtatható.
 
+1. Nyisd meg az `index.html` fájlt böngészőben.
+2. Vagy töltsd fel GitHubra, majd kapcsold be a GitHub Pages funkciót.
+
 ## Fő funkciók
 
 - hangulat szerinti keresés;
