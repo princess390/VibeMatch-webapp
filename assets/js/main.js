@@ -5,6 +5,7 @@ const TMDB_API_KEY = "55bb82a9225c1d8ac96916c5053e2581";
 const TMDB_LANGUAGE = "hu-HU";
 const TMDB_REGION = "HU";
 const cardItemStore = new Map();
+const tmdbKeywordCache = new Map();
 
 const streamingProviders = {
   8: {
@@ -754,6 +755,44 @@ function getPrimaryKeyword(mood) {
   return mood?.apiKeywords?.[0] || mood?.label || "";
 }
 
+function getEnglishApiKeywords(mood) {
+  return (mood?.apiKeywords || [])
+    .filter(keyword => /^[a-z0-9\s-]+$/i.test(keyword))
+    .slice(0, 4);
+}
+
+async function getTmdbKeywordIds(mood) {
+  const keywords = getEnglishApiKeywords(mood);
+  const cacheKey = keywords.join("|");
+
+  if (!cacheKey) return [];
+  if (tmdbKeywordCache.has(cacheKey)) return tmdbKeywordCache.get(cacheKey);
+
+  const requests = keywords.map(keyword => {
+    const params = new URLSearchParams({
+      api_key: TMDB_API_KEY,
+      query: keyword
+    });
+
+    return fetchJsonWithTimeout(`https://api.themoviedb.org/3/search/keyword?${params.toString()}`, 4500);
+  });
+  const results = await Promise.allSettled(requests);
+  const ids = [];
+
+  results.forEach(result => {
+    if (result.status !== "fulfilled") return;
+
+    (result.value.results || []).slice(0, 2).forEach(keyword => {
+      if (keyword.id) ids.push(keyword.id);
+    });
+  });
+
+  const uniqueIds = [...new Set(ids)].slice(0, 8);
+  tmdbKeywordCache.set(cacheKey, uniqueIds);
+
+  return uniqueIds;
+}
+
 async function fetchJsonWithTimeout(url, timeoutMs = 4500) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -1063,6 +1102,66 @@ function scoreTmdbResult(item, result, type) {
   return providerBonus + hungarianBonus + voteBonus + popularityBonus;
 }
 
+function getSearchTokens(input) {
+  return normalizeMoodText(input)
+    .split(/\s+/)
+    .filter(token => token.length > 2 && !freeTextStopWords.has(token));
+}
+
+function scoreTextRelevance(text, tokens) {
+  const normalizedText = normalizeMoodText(text);
+  if (!normalizedText || tokens.length === 0) return 0;
+
+  return tokens.reduce((score, token) => {
+    if (normalizedText === token) return score + 80;
+    if (normalizedText.includes(token)) return score + 28;
+
+    return score;
+  }, 0);
+}
+
+function scoreItemRelevance(item, input = "", mood = null) {
+  const inputTokens = getSearchTokens(input);
+  const moodTokens = [
+    mood?.label,
+    ...(mood?.keywords || []),
+    ...(mood?.apiKeywords || [])
+  ].flatMap(getSearchTokens);
+  const tokens = [...new Set([...inputTokens, ...moodTokens])].slice(0, 24);
+  const searchableText = [
+    item?.title,
+    item?.originalTitle,
+    item?.description,
+    item?.platform,
+    ...(item?.moods || [])
+  ].join(" ");
+
+  const textScore = scoreTextRelevance(searchableText, tokens);
+  const typeScore = item?.type ? 10 : 0;
+  const imageScore = hasRealImage(item) ? 25 : 0;
+
+  return textScore + typeScore + imageScore;
+}
+
+function rankBySearchRelevance(items, input = "", mood = null) {
+  const hasSearch = Boolean(getMeaningfulSearchQuery(input) || mood);
+
+  if (!hasSearch) return items || [];
+
+  return [...(items || [])]
+    .map((item, index) => ({
+      item,
+      index,
+      score: scoreItemRelevance(item, input, mood)
+    }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+
+      return a.index - b.index;
+    })
+    .map(({ item }) => item);
+}
+
 async function fetchTmdbItems(type, mood) {
   const genres = type === "sorozat" ? mood?.tvGenres : mood?.movieGenres;
   const endpoint = type === "sorozat" ? "discover/tv" : "discover/movie";
@@ -1086,11 +1185,25 @@ async function fetchTmdbItems(type, mood) {
     params.set("with_genres", genres.join("|"));
   }
 
-  const pageResults = await Promise.allSettled([1, 2].map(page => fetchTmdbDiscoverPage(endpoint, params, page)));
-  const baseResults = pageResults
+  const keywordIds = await getTmdbKeywordIds(mood);
+  if (keywordIds.length) {
+    params.set("with_keywords", keywordIds.join("|"));
+  }
+
+  let pageResults = await Promise.allSettled([1, 2].map(page => fetchTmdbDiscoverPage(endpoint, params, page)));
+  let baseResults = pageResults
     .flatMap(result => result.status === "fulfilled" ? result.value : [])
     .filter(result => result.poster_path)
     .slice(0, 18);
+
+  if (baseResults.length === 0 && params.has("with_keywords")) {
+    params.delete("with_keywords");
+    pageResults = await Promise.allSettled([1, 2].map(page => fetchTmdbDiscoverPage(endpoint, params, page)));
+    baseResults = pageResults
+      .flatMap(result => result.status === "fulfilled" ? result.value : [])
+      .filter(result => result.poster_path)
+      .slice(0, 18);
+  }
 
   const detailedItems = await Promise.all(baseResults.map(async result => {
     const details = await fetchTmdbDetails(type, result.id);
@@ -1364,19 +1477,39 @@ const freeTextStopWords = new Set([
   "egy", "vagy", "valami", "valamilyen", "olyan", "ami", "amit", "ahol", "hogy",
   "keresek", "keresnék", "keresnek", "akarok", "szeretnek", "szeretnék", "nezek",
   "nézek", "nezni", "nézni", "olvasni", "hallgatni", "ajanlj", "ajánlj",
+  "adjon", "legyen", "legyenek", "nekem", "most", "ma", "hangulat", "hangulatú",
   "film", "filmet", "filmek", "mozi", "sorozat", "sorozatot", "zene", "zenet",
   "zenék", "zenek", "dal", "dalt", "szam", "szám", "konyv", "könyv", "konyvet",
   "könyvet", "konyvek", "könyvek"
 ]);
 
 function getMeaningfulSearchQuery(input) {
-  const normalized = normalizeMoodText(input);
-  const words = normalized
+  const originalWords = String(input || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]+/gu, " ")
     .split(/\s+/)
     .map(word => word.trim())
-    .filter(word => word.length > 2 && !freeTextStopWords.has(word));
+    .filter(Boolean);
+
+  const words = originalWords.filter(word => {
+    const normalizedWord = normalizeMoodText(word);
+
+    return normalizedWord.length > 2 && !freeTextStopWords.has(normalizedWord);
+  });
 
   return words.join(" ").trim();
+}
+
+function showResultsLoading(message = "Keresés folyamatban...") {
+  const container = document.getElementById("results");
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="empty-state">
+      <h4>${message}</h4>
+      <p>Megnézzük a filmeket, sorozatokat, könyveket és zenéket az API-kból.</p>
+    </div>
+  `;
 }
 
 function getEmptySearchMessage(input) {
@@ -1575,6 +1708,8 @@ async function renderResults(items, emptyMessage = "Próbálj másik hangulatot,
 async function applyFilters() {
   if (!document.getElementById("results")) return;
 
+  showResultsLoading();
+
   const rawMoodInput = document
     .getElementById("moodFilter")
     .value
@@ -1600,7 +1735,7 @@ async function applyFilters() {
   if (foundMood && platformInput === "all") {
     filtered = await fetchApiRecommendations(foundMood[0], typeInput);
 
-    if (filtered.length < 4 && getMeaningfulSearchQuery(rawMoodInput)) {
+    if (getMeaningfulSearchQuery(rawMoodInput)) {
       filtered = uniqueItems([...filtered, ...await fetchFreeTextRecommendations(rawMoodInput, typeInput)]);
     }
   }
@@ -1614,6 +1749,8 @@ async function applyFilters() {
   if (filtered.length === 0) {
     filtered = filterLocalContents(moodInput, typeInput, platformInput);
   }
+
+  filtered = rankBySearchRelevance(filtered, rawMoodInput, foundMood?.[1]);
 
   renderResults(filtered, getEmptySearchMessage(rawMoodInput));
 
@@ -1648,6 +1785,8 @@ setInterval(rotatePlaceholder, 2500);
 async function quickFilter(type) {
   if (!document.getElementById("results")) return;
 
+  showResultsLoading();
+
   const buttons = document.querySelectorAll(".filter-btn");
 
   buttons.forEach(btn => {
@@ -1677,7 +1816,7 @@ async function quickFilter(type) {
   if (foundMood && platformInput === "all") {
     filtered = await fetchApiRecommendations(foundMood[0], type);
 
-    if (filtered.length < 4 && getMeaningfulSearchQuery(rawMoodInput)) {
+    if (getMeaningfulSearchQuery(rawMoodInput)) {
       filtered = uniqueItems([...filtered, ...await fetchFreeTextRecommendations(rawMoodInput, type)]);
     }
   }
@@ -1691,6 +1830,8 @@ async function quickFilter(type) {
   if (filtered.length === 0) {
     filtered = filterLocalContents(moodInput, type, platformInput);
   }
+
+  filtered = rankBySearchRelevance(filtered, rawMoodInput, foundMood?.[1]);
 
   renderResults(filtered, getEmptySearchMessage(rawMoodInput));
 }
@@ -2338,6 +2479,8 @@ window.loadSaved = loadSaved;
 async function applyUrlFilters() {
   if (!document.getElementById("results")) return;
 
+  showResultsLoading();
+
   const params = new URLSearchParams(window.location.search);
 
   const mood = params.get("mood");
@@ -2362,7 +2505,7 @@ async function applyUrlFilters() {
   if (foundMood) {
     filtered = await fetchApiRecommendations(foundMood[0], type);
 
-    if (filtered.length < 4 && getMeaningfulSearchQuery(moodInputValue)) {
+    if (getMeaningfulSearchQuery(moodInputValue)) {
       filtered = uniqueItems([...filtered, ...await fetchFreeTextRecommendations(moodInputValue, type)]);
     }
   }
@@ -2376,6 +2519,8 @@ async function applyUrlFilters() {
   if (filtered.length === 0) {
     filtered = filterLocalContents(mood || "", type, "all");
   }
+
+  filtered = rankBySearchRelevance(filtered, moodInputValue, foundMood?.[1]);
 
   /* eredmények betöltése */
   renderResults(filtered, getEmptySearchMessage(moodInputValue));
