@@ -1,5 +1,5 @@
 ﻿import supabase from "./supabase.js";
-import { findMood, getMoodByKey, getMoodLabels, normalizeText } from "./moods.js";
+import { findMood, getMoodByKey, getMoodLabels, normalizeText as normalizeMoodText } from "./moods.js";
 
 const TMDB_API_KEY = "55bb82a9225c1d8ac96916c5053e2581";
 const TMDB_LANGUAGE = "hu-HU";
@@ -1365,7 +1365,7 @@ async function showResults() {
 function searchMood() {
 
   const rawInput = document.getElementById("moodSearch").value;
-  const input = normalizeText(rawInput);
+  const input = normalizeMoodText(rawInput);
 
   let mood = "";
   let type = "";
