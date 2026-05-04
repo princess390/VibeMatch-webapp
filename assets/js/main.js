@@ -5,7 +5,6 @@ const TMDB_API_KEY = "55bb82a9225c1d8ac96916c5053e2581";
 const TMDB_LANGUAGE = "hu-HU";
 const TMDB_REGION = "HU";
 const cardItemStore = new Map();
-const tmdbKeywordCache = new Map();
 
 const streamingProviders = {
   8: {
@@ -755,44 +754,6 @@ function getPrimaryKeyword(mood) {
   return mood?.apiKeywords?.[0] || mood?.label || "";
 }
 
-function getEnglishApiKeywords(mood) {
-  return (mood?.apiKeywords || [])
-    .filter(keyword => /^[a-z0-9\s-]+$/i.test(keyword))
-    .slice(0, 4);
-}
-
-async function getTmdbKeywordIds(mood) {
-  const keywords = getEnglishApiKeywords(mood);
-  const cacheKey = keywords.join("|");
-
-  if (!cacheKey) return [];
-  if (tmdbKeywordCache.has(cacheKey)) return tmdbKeywordCache.get(cacheKey);
-
-  const requests = keywords.map(keyword => {
-    const params = new URLSearchParams({
-      api_key: TMDB_API_KEY,
-      query: keyword
-    });
-
-    return fetchJsonWithTimeout(`https://api.themoviedb.org/3/search/keyword?${params.toString()}`, 4500);
-  });
-  const results = await Promise.allSettled(requests);
-  const ids = [];
-
-  results.forEach(result => {
-    if (result.status !== "fulfilled") return;
-
-    (result.value.results || []).slice(0, 2).forEach(keyword => {
-      if (keyword.id) ids.push(keyword.id);
-    });
-  });
-
-  const uniqueIds = [...new Set(ids)].slice(0, 8);
-  tmdbKeywordCache.set(cacheKey, uniqueIds);
-
-  return uniqueIds;
-}
-
 async function fetchJsonWithTimeout(url, timeoutMs = 4500) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -1102,66 +1063,6 @@ function scoreTmdbResult(item, result, type) {
   return providerBonus + hungarianBonus + voteBonus + popularityBonus;
 }
 
-function getSearchTokens(input) {
-  return normalizeMoodText(input)
-    .split(/\s+/)
-    .filter(token => token.length > 2 && !freeTextStopWords.has(token));
-}
-
-function scoreTextRelevance(text, tokens) {
-  const normalizedText = normalizeMoodText(text);
-  if (!normalizedText || tokens.length === 0) return 0;
-
-  return tokens.reduce((score, token) => {
-    if (normalizedText === token) return score + 80;
-    if (normalizedText.includes(token)) return score + 28;
-
-    return score;
-  }, 0);
-}
-
-function scoreItemRelevance(item, input = "", mood = null) {
-  const inputTokens = getSearchTokens(input);
-  const moodTokens = [
-    mood?.label,
-    ...(mood?.keywords || []),
-    ...(mood?.apiKeywords || [])
-  ].flatMap(getSearchTokens);
-  const tokens = [...new Set([...inputTokens, ...moodTokens])].slice(0, 24);
-  const searchableText = [
-    item?.title,
-    item?.originalTitle,
-    item?.description,
-    item?.platform,
-    ...(item?.moods || [])
-  ].join(" ");
-
-  const textScore = scoreTextRelevance(searchableText, tokens);
-  const typeScore = item?.type ? 10 : 0;
-  const imageScore = hasRealImage(item) ? 25 : 0;
-
-  return textScore + typeScore + imageScore;
-}
-
-function rankBySearchRelevance(items, input = "", mood = null) {
-  const hasSearch = Boolean(getMeaningfulSearchQuery(input) || mood);
-
-  if (!hasSearch) return items || [];
-
-  return [...(items || [])]
-    .map((item, index) => ({
-      item,
-      index,
-      score: scoreItemRelevance(item, input, mood)
-    }))
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-
-      return a.index - b.index;
-    })
-    .map(({ item }) => item);
-}
-
 async function fetchTmdbItems(type, mood) {
   const genres = type === "sorozat" ? mood?.tvGenres : mood?.movieGenres;
   const endpoint = type === "sorozat" ? "discover/tv" : "discover/movie";
@@ -1185,25 +1086,11 @@ async function fetchTmdbItems(type, mood) {
     params.set("with_genres", genres.join("|"));
   }
 
-  const keywordIds = await getTmdbKeywordIds(mood);
-  if (keywordIds.length) {
-    params.set("with_keywords", keywordIds.join("|"));
-  }
-
-  let pageResults = await Promise.allSettled([1, 2].map(page => fetchTmdbDiscoverPage(endpoint, params, page)));
-  let baseResults = pageResults
+  const pageResults = await Promise.allSettled([1, 2].map(page => fetchTmdbDiscoverPage(endpoint, params, page)));
+  const baseResults = pageResults
     .flatMap(result => result.status === "fulfilled" ? result.value : [])
     .filter(result => result.poster_path)
     .slice(0, 18);
-
-  if (baseResults.length === 0 && params.has("with_keywords")) {
-    params.delete("with_keywords");
-    pageResults = await Promise.allSettled([1, 2].map(page => fetchTmdbDiscoverPage(endpoint, params, page)));
-    baseResults = pageResults
-      .flatMap(result => result.status === "fulfilled" ? result.value : [])
-      .filter(result => result.poster_path)
-      .slice(0, 18);
-  }
 
   const detailedItems = await Promise.all(baseResults.map(async result => {
     const details = await fetchTmdbDetails(type, result.id);
@@ -1237,55 +1124,6 @@ async function fetchTmdbItems(type, mood) {
     .filter(({ item }) => item.title && item.platform !== "TMDB")
     .sort((a, b) => b.score - a.score)
     .slice(0, 18)
-    .map(({ item }) => item);
-}
-
-async function fetchTmdbSearchItems(type, query) {
-  const mediaType = type === "sorozat" ? "tv" : "movie";
-  const titleField = type === "sorozat" ? "name" : "title";
-  const originalTitleField = type === "sorozat" ? "original_name" : "original_title";
-  const params = new URLSearchParams({
-    api_key: TMDB_API_KEY,
-    language: TMDB_LANGUAGE,
-    region: TMDB_REGION,
-    query,
-    include_adult: "false"
-  });
-
-  const response = await fetch(`https://api.themoviedb.org/3/search/${mediaType}?${params.toString()}`);
-  const data = await response.json();
-  const baseResults = (data.results || [])
-    .filter(result => result.poster_path)
-    .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
-    .slice(0, 14);
-
-  const detailedItems = await Promise.all(baseResults.map(async result => {
-    const details = await fetchTmdbDetails(type, result.id);
-    const provider = getTmdbProvider(details["watch/providers"]);
-    const title = details[titleField] || result[titleField] || details[originalTitleField] || result[originalTitleField];
-    const originalTitle = details[originalTitleField] || result[originalTitleField];
-    const item = {
-      title: title || originalTitle,
-      originalTitle,
-      type,
-      moods: ["Keresés"],
-      platform: getProviderName(provider),
-      link: getProviderLink(provider, title || originalTitle),
-      tmdbLink: `https://www.themoviedb.org/${mediaType}/${result.id}?language=hu-HU`,
-      image: result.poster_path ? `https://image.tmdb.org/t/p/w500${result.poster_path}` : "",
-      description: details.overview || result.overview || ""
-    };
-
-    return {
-      item,
-      score: scoreTmdbResult(item, result, type)
-    };
-  }));
-
-  return detailedItems
-    .filter(({ item }) => item.title)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 12)
     .map(({ item }) => item);
 }
 
@@ -1386,39 +1224,6 @@ async function fetchMusicItems(mood, moodKey = "") {
     .map(({ item }) => item);
 }
 
-async function fetchBookSearchItems(query) {
-  const results = await Promise.allSettled([
-    fetchJsonWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&langRestrict=hu&country=HU&printType=books&maxResults=24`)
-  ]);
-
-  return uniqueItems(collectGoogleBooks(results)
-    .map((book, index) => ({
-      item: mapGoogleBook(book, "Keresés", index),
-      rawBook: book,
-      score: scoreBook(book)
-    }))
-    .filter(({ item }) => item.title)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 14)
-    .map(({ item }) => item));
-}
-
-async function fetchMusicSearchItems(query) {
-  const results = await Promise.allSettled([
-    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&country=HU&media=music&limit=25`)
-      .then(response => response.json())
-  ]);
-
-  return collectItunesSongs(results)
-    .map(song => ({
-      item: mapItunesSong(song, "Keresés"),
-      score: scoreSong(song, [query])
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 14)
-    .map(({ item }) => item);
-}
-
 async function fetchPopularBookItems() {
   const requests = popularTranslatedBookQueries.map(query =>
     fetchJsonWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&langRestrict=hu&country=HU&printType=books&maxResults=20`)
@@ -1467,71 +1272,6 @@ async function fetchApiRecommendations(moodKey, type = "all") {
   if (type === "all" || type === "sorozat") requests.push(fetchTmdbItems("sorozat", mood));
   if (type === "all" || type === "konyv") requests.push(fetchBookItems(mood, moodKey));
   if (type === "all" || type === "zene") requests.push(fetchMusicItems(mood, moodKey));
-
-  const results = await Promise.allSettled(requests);
-
-  return uniqueItems(results.flatMap(result => result.status === "fulfilled" ? result.value : []));
-}
-
-const freeTextStopWords = new Set([
-  "egy", "vagy", "valami", "valamilyen", "olyan", "ami", "amit", "ahol", "hogy",
-  "keresek", "keresnék", "keresnek", "akarok", "szeretnek", "szeretnék", "nezek",
-  "nézek", "nezni", "nézni", "olvasni", "hallgatni", "ajanlj", "ajánlj",
-  "adjon", "legyen", "legyenek", "nekem", "most", "ma", "hangulat", "hangulatú",
-  "film", "filmet", "filmek", "mozi", "sorozat", "sorozatot", "zene", "zenet",
-  "zenék", "zenek", "dal", "dalt", "szam", "szám", "konyv", "könyv", "konyvet",
-  "könyvet", "konyvek", "könyvek"
-]);
-
-function getMeaningfulSearchQuery(input) {
-  const originalWords = String(input || "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]+/gu, " ")
-    .split(/\s+/)
-    .map(word => word.trim())
-    .filter(Boolean);
-
-  const words = originalWords.filter(word => {
-    const normalizedWord = normalizeMoodText(word);
-
-    return normalizedWord.length > 2 && !freeTextStopWords.has(normalizedWord);
-  });
-
-  return words.join(" ").trim();
-}
-
-function showResultsLoading(message = "Keresés folyamatban...") {
-  const container = document.getElementById("results");
-  if (!container) return;
-
-  container.innerHTML = `
-    <div class="empty-state">
-      <h4>${message}</h4>
-      <p>Megnézzük a filmeket, sorozatokat, könyveket és zenéket az API-kból.</p>
-    </div>
-  `;
-}
-
-function getEmptySearchMessage(input) {
-  const trimmedInput = String(input || "").trim();
-
-  if (!trimmedInput) {
-    return "Írj be egy hangulatot vagy válassz másik típust.";
-  }
-
-  return `Nem találtunk találatot erre: "${escapeHtml(trimmedInput)}". Próbálj általánosabb hangulatot vagy másik tartalomtípust.`;
-}
-
-async function fetchFreeTextRecommendations(input, type = "all") {
-  const query = getMeaningfulSearchQuery(input);
-  if (!query) return [];
-
-  const requests = [];
-
-  if (type === "all" || type === "film") requests.push(fetchTmdbSearchItems("film", query));
-  if (type === "all" || type === "sorozat") requests.push(fetchTmdbSearchItems("sorozat", query));
-  if (type === "all" || type === "konyv") requests.push(fetchBookSearchItems(query));
-  if (type === "all" || type === "zene") requests.push(fetchMusicSearchItems(query));
 
   const results = await Promise.allSettled(requests);
 
@@ -1642,17 +1382,12 @@ function searchMood() {
   }
 
   /* URL paraméterek */
-  const params = new URLSearchParams();
+  let url = "eredmenyek.html?";
 
-  if (mood) {
-    params.set("mood", mood);
-  } else if (getMeaningfulSearchQuery(rawInput)) {
-    params.set("mood", rawInput.trim());
-  }
+  if (mood) url += `mood=${encodeURIComponent(mood)}&`;
+  if (type) url += `type=${encodeURIComponent(type)}`;
 
-  if (type) params.set("type", type);
-
-  window.location.href = `eredmenyek.html?${params.toString()}`;
+  window.location.href = url;
 
 }
 
@@ -1675,7 +1410,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 
-async function renderResults(items, emptyMessage = "Próbálj másik hangulatot, típust vagy platformot választani.") {
+async function renderResults(items) {
   const container = document.getElementById("results");
 
   if (!container) return;
@@ -1685,7 +1420,7 @@ async function renderResults(items, emptyMessage = "Próbálj másik hangulatot,
   container.innerHTML = "";
 
   if (!items || items.length === 0) {
-    showEmptyState(container, emptyMessage);
+    showEmptyState(container, "Próbálj másik hangulatot, típust vagy platformot választani.");
     return;
   }
 
@@ -1708,13 +1443,6 @@ async function renderResults(items, emptyMessage = "Próbálj másik hangulatot,
 async function applyFilters() {
   if (!document.getElementById("results")) return;
 
-  showResultsLoading();
-
-  const rawMoodInput = document
-    .getElementById("moodFilter")
-    .value
-    .trim();
-
   const moodInput = document
     .getElementById("moodFilter")
     .value
@@ -1734,25 +1462,17 @@ async function applyFilters() {
 
   if (foundMood && platformInput === "all") {
     filtered = await fetchApiRecommendations(foundMood[0], typeInput);
-
-    if (getMeaningfulSearchQuery(rawMoodInput)) {
-      filtered = uniqueItems([...filtered, ...await fetchFreeTextRecommendations(rawMoodInput, typeInput)]);
-    }
   }
 
   if (!foundMood && platformInput === "all") {
-    filtered = getMeaningfulSearchQuery(rawMoodInput)
-      ? await fetchFreeTextRecommendations(rawMoodInput, typeInput)
-      : await fetchPopularByType(typeInput);
+    filtered = await fetchPopularByType(typeInput);
   }
 
   if (filtered.length === 0) {
     filtered = filterLocalContents(moodInput, typeInput, platformInput);
   }
 
-  filtered = rankBySearchRelevance(filtered, rawMoodInput, foundMood?.[1]);
-
-  renderResults(filtered, getEmptySearchMessage(rawMoodInput));
+  renderResults(filtered);
 
 }
 
@@ -1785,8 +1505,6 @@ setInterval(rotatePlaceholder, 2500);
 async function quickFilter(type) {
   if (!document.getElementById("results")) return;
 
-  showResultsLoading();
-
   const buttons = document.querySelectorAll(".filter-btn");
 
   buttons.forEach(btn => {
@@ -1799,12 +1517,11 @@ async function quickFilter(type) {
     clickedButton.classList.add("active");
   }
 
-  const rawMoodInput = document
+  const moodInput = document
     .getElementById("moodFilter")
     .value
+    .toLowerCase()
     .trim();
-
-  const moodInput = rawMoodInput.toLowerCase();
 
   const platformInput = document
     .getElementById("platformFilter")
@@ -1815,25 +1532,17 @@ async function quickFilter(type) {
 
   if (foundMood && platformInput === "all") {
     filtered = await fetchApiRecommendations(foundMood[0], type);
-
-    if (getMeaningfulSearchQuery(rawMoodInput)) {
-      filtered = uniqueItems([...filtered, ...await fetchFreeTextRecommendations(rawMoodInput, type)]);
-    }
   }
 
   if (!foundMood && platformInput === "all") {
-    filtered = getMeaningfulSearchQuery(rawMoodInput)
-      ? await fetchFreeTextRecommendations(rawMoodInput, type)
-      : await fetchPopularByType(type);
+    filtered = await fetchPopularByType(type);
   }
 
   if (filtered.length === 0) {
     filtered = filterLocalContents(moodInput, type, platformInput);
   }
 
-  filtered = rankBySearchRelevance(filtered, rawMoodInput, foundMood?.[1]);
-
-  renderResults(filtered, getEmptySearchMessage(rawMoodInput));
+  renderResults(filtered);
 }
 
 function randomVibe() {
@@ -2479,13 +2188,10 @@ window.loadSaved = loadSaved;
 async function applyUrlFilters() {
   if (!document.getElementById("results")) return;
 
-  showResultsLoading();
-
   const params = new URLSearchParams(window.location.search);
 
   const mood = params.get("mood");
   const type = params.get("tipus") || params.get("type") || "all";
-  const moodInputValue = mood || "";
 
   const foundMood = mood ? (getMoodByKey(mood) ? [mood, getMoodByKey(mood)] : findMood(mood)) : null;
   let filtered = [];
@@ -2504,32 +2210,27 @@ async function applyUrlFilters() {
 
   if (foundMood) {
     filtered = await fetchApiRecommendations(foundMood[0], type);
-
-    if (getMeaningfulSearchQuery(moodInputValue)) {
-      filtered = uniqueItems([...filtered, ...await fetchFreeTextRecommendations(moodInputValue, type)]);
-    }
   }
 
   if (!foundMood) {
-    filtered = getMeaningfulSearchQuery(moodInputValue)
-      ? await fetchFreeTextRecommendations(moodInputValue, type)
-      : await fetchPopularByType(type);
+    filtered = await fetchPopularByType(type);
   }
 
   if (filtered.length === 0) {
     filtered = filterLocalContents(mood || "", type, "all");
   }
 
-  filtered = rankBySearchRelevance(filtered, moodInputValue, foundMood?.[1]);
-
   /* eredmények betöltése */
-  renderResults(filtered, getEmptySearchMessage(moodInputValue));
+  renderResults(filtered);
 
 }
 
+window.addEventListener("load", applyUrlFilters);
+
+
 document.addEventListener("DOMContentLoaded", () => {
   if (document.getElementById("results")) {
-    applyUrlFilters();
+    showResults();
   }
 
   if (document.getElementById("savedContainer")) {

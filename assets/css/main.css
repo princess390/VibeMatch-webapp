@@ -2,6 +2,7 @@
   font-family: 'Segoe UI', sans-serif;
   background-color: #f4f6fa;
   padding-top: 80px;
+  color: #ffffff;
 }
 
 .hero-section {
@@ -353,6 +354,16 @@ body {
 .empty-state p {
   color: rgba(255, 255, 255, 0.78);
   margin: 0;
+}
+
+.today-picks,
+.profile-page {
+  color: #ffffff;
+}
+
+.today-picks .section-title,
+.profile-page h2 {
+  color: #ffffff;
 }
 
 .slider .empty-state {
